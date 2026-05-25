@@ -1,0 +1,6 @@
+2026-05-22 10:01:12 WARNING Failed login for user admin from 192.168.1.44
+2026-05-22 10:01:19 WARNING Failed password for user admin from 192.168.1.44
+2026-05-22 10:01:25 WARNING Authentication failed for user root from 192.168.1.44
+2026-05-22 10:01:31 WARNING Login failed for user test from 192.168.1.44
+2026-05-22 10:01:39 WARNING Invalid password for user administrator from 192.168.1.44
+2026-05-22 10:03:02 INFO User maria logged in successfully

@@ -1,0 +1,2 @@
+This is a harmless Sentinel ClamAV test file.
+SENTINEL-CLAMAV-TEST-FILE

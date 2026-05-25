@@ -1,0 +1,4 @@
+2026-05-22 10:00:01 INFO Sentinel service started successfully
+2026-05-22 10:00:05 INFO User alex logged in successfully
+2026-05-22 10:02:12 INFO Backup completed successfully
+2026-05-22 10:04:00 INFO Network status normal

