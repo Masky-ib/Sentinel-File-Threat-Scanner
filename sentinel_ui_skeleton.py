@@ -118,6 +118,7 @@ class SentinelUI:
         nav_items = [
             ("Dashboard", self.show_dashboard),
             ("Scan History", self.show_history),
+            ("Threat Guide", self.show_threat_guide),
             ("Settings", self.show_settings),
         ]
 
@@ -165,6 +166,7 @@ class SentinelUI:
 
     def _set_active_nav(self, active_name: str) -> None:
         self.current_tab = active_name
+
         for name, button in self.nav_buttons.items():
             if name == active_name:
                 button.configure(bg="#1e293b", fg=self.colors["accent"])
@@ -174,6 +176,7 @@ class SentinelUI:
     def _clear_content(self) -> None:
         for widget in self.content_frame.winfo_children():
             widget.destroy()
+
         self.dashboard_widgets = {}
         self.settings_vars = {}
 
@@ -185,6 +188,7 @@ class SentinelUI:
             highlightthickness=1,
             bd=0,
         )
+
         tk.Label(
             panel,
             text=title,
@@ -193,6 +197,7 @@ class SentinelUI:
             font=("Segoe UI", 12, "bold"),
             anchor="w",
         ).pack(fill="x", padx=14, pady=(12, 8))
+
         return panel
 
     def refresh_static_views(self) -> None:
@@ -203,11 +208,14 @@ class SentinelUI:
             self.update_dashboard_widgets()
         elif self.current_tab == "Scan History":
             self.show_history()
+        elif self.current_tab == "Threat Guide":
+            self.show_threat_guide()
         elif self.current_tab == "Settings":
             self.show_settings()
 
     def clear_alerts(self) -> None:
         self.state.alerts.clear()
+
         if self.current_tab == "Dashboard":
             self.update_dashboard_widgets()
 
@@ -305,6 +313,7 @@ class SentinelUI:
         drop_title.pack(pady=(34, 6))
 
         drop_subtitle_text = "or click to browse scripts, logs, configs, archives, and security files"
+
         if not DND_AVAILABLE:
             drop_subtitle_text = "click to browse scripts, logs, configs, archives, and security files"
 
@@ -511,6 +520,7 @@ class SentinelUI:
         self.dashboard_widgets["selected_file_box"].config(text=selected_file_text)
 
         level = "--"
+
         if self.state.current_result:
             level = self.state.current_result.get("level", "--")
 
@@ -533,6 +543,7 @@ class SentinelUI:
         findings_text.config(state="disabled")
 
         alerts_container = self.dashboard_widgets["alerts_container"]
+
         for widget in alerts_container.winfo_children():
             widget.destroy()
 
@@ -585,11 +596,13 @@ class SentinelUI:
 
         def on_enter(_event):
             row.config(bg=self.colors["row_hover"])
+
             for child in row.winfo_children():
                 child.config(bg=self.colors["row_hover"])
 
         def on_leave(_event):
             row.config(bg=self.colors["row_bg"])
+
             for child in row.winfo_children():
                 child.config(bg=self.colors["row_bg"])
 
@@ -682,8 +695,10 @@ class SentinelUI:
                 ).pack(side="left")
 
             normalized_query = query.strip().lower()
+
             for row_data in self.state.history:
                 haystack = f"{row_data['file']} {row_data['level']} {row_data['time']}".lower()
+
                 if not normalized_query or normalized_query in haystack:
                     self._add_history_row(table_wrap, row_data)
 
@@ -709,6 +724,218 @@ class SentinelUI:
         search_entry.insert(0, "")
 
         build_history_table()
+
+    def _guide_section(
+        self,
+        parent: tk.Frame,
+        title: str,
+        body: str,
+        accent: str | None = None,
+    ) -> None:
+        card = tk.Frame(
+            parent,
+            bg="#0b1220",
+            highlightbackground=self.colors["border"],
+            highlightthickness=1,
+        )
+        card.pack(fill="x", expand=True, pady=6)
+
+        tk.Label(
+            card,
+            text=title,
+            bg="#0b1220",
+            fg=accent if accent else self.colors["text"],
+            font=("Segoe UI", 11, "bold"),
+            anchor="w",
+        ).pack(fill="x", padx=12, pady=(10, 3))
+
+        tk.Label(
+            card,
+            text=body,
+            bg="#0b1220",
+            fg=self.colors["muted"],
+            font=("Segoe UI", 10),
+            anchor="w",
+            justify="left",
+            wraplength=1000,
+        ).pack(fill="x", padx=12, pady=(0, 10))
+
+    def show_threat_guide(self) -> None:
+        self._set_active_nav("Threat Guide")
+        self._clear_content()
+        self.sidebar_status_label.config(text=self.state.status)
+
+        guide_panel = self._panel(self.content_frame, "Threat Guide")
+        guide_panel.pack(fill="both", expand=True)
+
+        intro = tk.Label(
+            guide_panel,
+            text=(
+                "This page explains what Sentinel results mean. "
+                "It is a quick reference for understanding scan modes, threat levels, "
+                "antivirus results, archive scan messages, and common detection categories."
+            ),
+            bg=self.colors["panel"],
+            fg=self.colors["muted"],
+            font=("Segoe UI", 10),
+            anchor="w",
+            justify="left",
+            wraplength=1100,
+        )
+        intro.pack(fill="x", padx=14, pady=(0, 10))
+
+        body = tk.Frame(guide_panel, bg=self.colors["panel"])
+        body.pack(fill="both", expand=True, padx=14, pady=(0, 14))
+        body.grid_rowconfigure(0, weight=1)
+        body.grid_columnconfigure(0, weight=1)
+
+        canvas = tk.Canvas(
+            body,
+            bg=self.colors["panel"],
+            highlightthickness=0,
+            bd=0,
+        )
+        canvas.grid(row=0, column=0, sticky="nsew")
+
+        scrollbar = tk.Scrollbar(body, orient="vertical", command=canvas.yview)
+        scrollbar.grid(row=0, column=1, sticky="ns")
+
+        scroll_frame = tk.Frame(canvas, bg=self.colors["panel"])
+
+        canvas_window = canvas.create_window(
+            (0, 0),
+            window=scroll_frame,
+            anchor="nw",
+        )
+
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        def update_scroll_region(_event=None) -> None:
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def resize_scroll_frame(event) -> None:
+            canvas.itemconfig(canvas_window, width=event.width)
+
+        def on_mousewheel(event) -> None:
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        def bind_mousewheel(_event=None) -> None:
+            canvas.bind_all("<MouseWheel>", on_mousewheel)
+
+        def unbind_mousewheel(_event=None) -> None:
+            canvas.unbind_all("<MouseWheel>")
+
+        scroll_frame.bind("<Configure>", update_scroll_region)
+        canvas.bind("<Configure>", resize_scroll_frame)
+        canvas.bind("<Enter>", bind_mousewheel)
+        canvas.bind("<Leave>", unbind_mousewheel)
+
+        self._guide_section(
+            scroll_frame,
+            "SAFE",
+            "No suspicious indicators were detected by Sentinel's rule scanner, and antivirus did not report a known threat.",
+            self.colors["safe"],
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "MEDIUM",
+            "Something unusual, incomplete, or potentially risky was found. Review the file before trusting it.",
+            self.colors["medium"],
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "HIGH",
+            "Suspicious behavior was detected, such as command execution, external URLs, privilege changes, suspicious scripts, repeated failed logins, or suspicious archive contents.",
+            self.colors["high"],
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "CRITICAL",
+            "A malware signature was detected by an antivirus engine, or a very severe indicator was found. Treat the file as dangerous.",
+            self.colors["critical"],
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "Antivirus scan: CLEAN",
+            "The antivirus engine did not recognize the file as known malware. This does not always mean the file is safe; Sentinel's rule scanner may still detect suspicious behavior.",
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "Antivirus scan: INFECTED",
+            "The antivirus engine detected a malware or test signature. Sentinel marks this as CRITICAL.",
+            self.colors["critical"],
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "Antivirus scan: ERROR / UNAVAILABLE",
+            "The antivirus scan could not complete or the engine was unavailable. Sentinel marks this as an incomplete scan instead of treating the file as safe.",
+            self.colors["medium"],
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "Docker Sandbox Mode",
+            "The file is scanned through Docker using ClamAV and Sentinel's rule scanner. This provides container isolation when Docker is available.",
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "Local Scan Mode",
+            "The file is scanned on the local machine. Sentinel uses Microsoft Defender when available, then applies its own rule-based checks.",
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "Auto Mode",
+            "Sentinel tries Docker Sandbox Mode first. If Docker is unavailable or fails, Sentinel falls back to Local Scan Mode.",
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "Archive / ZIP Scan",
+            "When a ZIP file is uploaded, Sentinel safely extracts its contents into a temporary folder, scans the extracted files, combines the results, and then cleans up the temporary files.",
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "Suspicious command-line tool",
+            "Sentinel found commands commonly used during intrusion activity, such as cmd.exe, PowerShell, certutil, curl, wget, or similar tools.",
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "External network indicator",
+            "Sentinel found a URL, IP address, FTP link, or external network location. These can be normal, but they are also common in malware download commands.",
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "Account or privilege manipulation",
+            "Sentinel found commands that may create users, modify groups, or change administrator-level access.",
+            self.colors["high"],
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "Failed login burst",
+            "Sentinel detected repeated failed login events. This can indicate brute-force attempts or credential guessing.",
+            self.colors["high"],
+        )
+
+        self._guide_section(
+            scroll_frame,
+            "Repeated service crash",
+            "Sentinel detected repeated service failures or crashes. This may indicate system instability, tampering, or failed exploitation attempts.",
+            self.colors["high"],
+        )
+
+        update_scroll_region()
 
     def show_settings(self) -> None:
         self._set_active_nav("Settings")
@@ -838,6 +1065,7 @@ class SentinelUI:
 
     def handle_file_drop(self, event) -> None:
         dropped_data = event.data
+
         try:
             paths = self.root.tk.splitlist(dropped_data)
         except Exception:
@@ -847,6 +1075,7 @@ class SentinelUI:
             return
 
         path = str(paths[0]).strip().strip("{}")
+
         if not os.path.isfile(path):
             self.state.status = "ERROR"
             self.state.current_result = {
@@ -913,10 +1142,12 @@ class SentinelUI:
     def _step_progress(self, value: int) -> None:
         if value <= 100:
             self.controller.set_progress(value)
+
             if self.current_tab == "Dashboard":
                 self.update_dashboard_widgets()
             else:
                 self.sidebar_status_label.config(text=self.state.status)
+
             self.root.after(35, lambda: self._step_progress(value + 4))
             return
 
@@ -940,6 +1171,7 @@ class SentinelUI:
 
     def _severity_color(self, level: str) -> str:
         level = str(level).upper()
+
         return {
             "SAFE": self.colors["safe"],
             "LOW": self.colors["safe"],
@@ -951,6 +1183,7 @@ class SentinelUI:
 
     def _status_color(self, status: str) -> str:
         status = str(status).upper()
+
         return {
             "IDLE": self.colors["muted"],
             "READY": self.colors["accent"],
@@ -965,6 +1198,7 @@ def main() -> None:
         root = TkinterDnD.Tk()
     else:
         root = tk.Tk()
+
     state = AppState()
     controller = Controller(state)
     SentinelUI(root, state, controller)
