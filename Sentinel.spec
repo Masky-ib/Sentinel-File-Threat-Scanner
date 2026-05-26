@@ -1,15 +1,27 @@
 # -*- mode: python ; coding: utf-8 -*-
+
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('backend', 'backend'), ('data', 'data'), ('sample_files', 'sample_files')]
+
+datas = [
+    ("backend", "backend"),
+    ("data", "data"),
+    ("sample_files", "sample_files"),
+    ("docker_scanner_image", "docker_scanner_image"),
+    ("clamav_defs", "clamav_defs"),
+]
+
 binaries = []
 hiddenimports = []
-tmp_ret = collect_all('tkinterdnd2')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
+tmp_ret = collect_all("tkinterdnd2")
+datas += tmp_ret[0]
+binaries += tmp_ret[1]
+hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
-    ['main.py'],
+    ["main.py"],
     pathex=[],
     binaries=binaries,
     datas=datas,
@@ -21,6 +33,7 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+
 pyz = PYZ(a.pure)
 
 exe = EXE(
@@ -28,7 +41,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Sentinel',
+    name="Sentinel",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -40,6 +53,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+
 coll = COLLECT(
     exe,
     a.binaries,
@@ -47,5 +61,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='Sentinel',
+    name="Sentinel",
 )
