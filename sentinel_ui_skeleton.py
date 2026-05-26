@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import os
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import filedialog, messagebox, ttk
 
 try:
     # tkinterdnd2 adds drag-and-drop support to Tkinter.
@@ -333,6 +333,27 @@ class SentinelUI:
 
         if self.current_tab == "Dashboard":
             self.update_dashboard_widgets()
+
+    def clear_scan_history(self) -> None:
+        """Ask for confirmation, then clear saved scan history.
+
+        This clears the SQLite scan history through the controller.
+        It also resets the visible history and dashboard result state.
+        """
+
+        confirmed = messagebox.askyesno(
+            "Clear Scan History",
+            (
+                "Are you sure you want to delete all saved scan history?\n\n"
+                "This will remove previous scans, findings, and recent alerts from Sentinel."
+            ),
+        )
+
+        if not confirmed:
+            return
+
+        self.controller.clear_scan_history()
+        self.show_history()
 
     def load_history_item(self, item: dict) -> None:
         """Load a previous scan history item into the dashboard result panel."""
@@ -807,8 +828,41 @@ class SentinelUI:
         header = self._panel(self.content_frame, "Scan History")
         header.pack(fill="both", expand=True)
 
-        search_frame = tk.Frame(header, bg=self.colors["panel"])
-        search_frame.pack(fill="x", padx=14, pady=(0, 10))
+        controls_frame = tk.Frame(header, bg=self.colors["panel"])
+        controls_frame.pack(fill="x", padx=14, pady=(0, 10))
+        controls_frame.grid_columnconfigure(0, weight=1)
+
+        search_var = tk.StringVar()
+
+        search_entry = tk.Entry(
+            controls_frame,
+            textvariable=search_var,
+            bg="#0b1220",
+            fg=self.colors["text"],
+            insertbackground=self.colors["text"],
+            relief="flat",
+            font=("Segoe UI", 10),
+            highlightbackground=self.colors["border"],
+            highlightthickness=1,
+        )
+        search_entry.grid(row=0, column=0, sticky="ew", ipady=8, padx=(0, 10))
+
+        clear_history_button = tk.Button(
+            controls_frame,
+            text="Clear Scan History",
+            command=self.clear_scan_history,
+            bg=self.colors["button_dark"],
+            fg=self.colors["text"],
+            relief="flat",
+            bd=0,
+            cursor="hand2",
+            activebackground="#31425f",
+            activeforeground=self.colors["text"],
+            font=("Segoe UI", 9, "bold"),
+            padx=12,
+            pady=8,
+        )
+        clear_history_button.grid(row=0, column=1, sticky="e")
 
         table_wrap = tk.Frame(header, bg=self.colors["panel"])
         table_wrap.pack(fill="both", expand=True, padx=14, pady=(0, 14))
@@ -842,34 +896,35 @@ class SentinelUI:
                 ).pack(side="left")
 
             normalized_query = query.strip().lower()
+            matching_rows = []
 
             for row_data in self.state.history:
                 haystack = f"{row_data['file']} {row_data['level']} {row_data['time']}".lower()
 
                 if not normalized_query or normalized_query in haystack:
-                    self._add_history_row(table_wrap, row_data)
+                    matching_rows.append(row_data)
 
-        search_var = tk.StringVar()
+            if not matching_rows:
+                tk.Label(
+                    table_wrap,
+                    text="No scan history available.",
+                    bg=self.colors["panel"],
+                    fg=self.colors["muted"],
+                    font=("Segoe UI", 10),
+                    anchor="w",
+                    padx=10,
+                    pady=12,
+                ).pack(fill="x")
+                return
+
+            for row_data in matching_rows:
+                self._add_history_row(table_wrap, row_data)
 
         def filter_history(*_args) -> None:
             build_history_table(search_var.get())
 
         # Rebuild table whenever the search input changes.
         search_var.trace_add("write", filter_history)
-
-        search_entry = tk.Entry(
-            search_frame,
-            textvariable=search_var,
-            bg="#0b1220",
-            fg=self.colors["text"],
-            insertbackground=self.colors["text"],
-            relief="flat",
-            font=("Segoe UI", 10),
-            highlightbackground=self.colors["border"],
-            highlightthickness=1,
-        )
-        search_entry.pack(fill="x", ipady=8)
-        search_entry.insert(0, "")
 
         build_history_table()
 
