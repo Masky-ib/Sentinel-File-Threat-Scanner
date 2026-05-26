@@ -303,3 +303,33 @@ def get_frontend_alerts(limit: int = 10) -> list[dict[str, Any]]:
         for scan in get_recent_scans(50)
         if scan["level"] in {"MEDIUM", "HIGH", "CRITICAL"}
     ][:limit]
+
+def clear_scan_history() -> None:
+    """Delete all stored scan history and findings from SQLite.
+
+    This is used by the desktop UI when the user chooses to clear scan history.
+
+    It deletes:
+    - all rows from findings
+    - all rows from scans
+
+    The database file itself is kept.
+    Keeping the database file is safer than deleting it while the app is running.
+    """
+
+    init_db()
+
+    with _connect() as connection:
+        cursor = connection.cursor()
+
+        # Delete findings first because findings belong to scans.
+        cursor.execute("DELETE FROM findings")
+
+        # Delete scan summary rows after findings are removed.
+        cursor.execute("DELETE FROM scans")
+
+        # Reset SQLite auto-increment counters.
+        # This is optional, but it makes a clean history feel truly reset.
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('findings', 'scans')")
+
+        connection.commit()
