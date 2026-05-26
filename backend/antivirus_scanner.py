@@ -442,4 +442,4 @@ def add_antivirus_result(
     scan_result["finding_count"] = len(findings)
     scan_result["level"] = current_level
 
-    return scan_result
+    return scan_result 
