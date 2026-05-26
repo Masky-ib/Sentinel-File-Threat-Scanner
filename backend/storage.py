@@ -15,11 +15,22 @@ The UI then uses this data for:
 - scan history
 - recent alerts
 - reviewing previous scan findings
+
+Important installer note:
+    When Sentinel is installed through the Windows installer, the app may live
+    inside Program Files.
+
+    Program Files is not a good place for changing runtime data such as a
+    SQLite database.
+
+    For that reason, Sentinel stores scan history in the current user's
+    AppData folder instead.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -31,14 +42,42 @@ from typing import Any
 #     backend/storage.py
 #
 # parents[1] moves from backend/ to the project root.
+#
+# This is still useful as a fallback during development, but the main database
+# location is now the user's AppData folder.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _get_app_data_dir() -> Path:
+    """Return a writable folder for Sentinel runtime data.
+
+    When Sentinel is installed through the Windows installer, the app may live
+    inside Program Files. Program Files is not a safe place to write changing
+    runtime files such as SQLite databases.
+
+    For that reason, Sentinel stores its scan history database inside the
+    current user's AppData folder.
+
+    Example on Windows:
+        C:/Users/alex/AppData/Local/Sentinel/
+
+    If LOCALAPPDATA is unavailable, the function falls back to the project's
+    local data folder so development still works.
+    """
+
+    local_app_data = os.getenv("LOCALAPPDATA")
+
+    if local_app_data:
+        return Path(local_app_data) / "Sentinel"
+
+    return PROJECT_ROOT / "data"
 
 
 # SQLite database path.
 #
-# The database is stored inside the data/ folder so generated runtime data is
-# separated from source code.
-DB_PATH = PROJECT_ROOT / "data" / "sentinel.db"
+# The database is stored in a user-writable AppData folder so the installed app
+# can save scan history without needing administrator permissions.
+DB_PATH = _get_app_data_dir() / "sentinel.db"
 
 
 def _connect() -> sqlite3.Connection:
@@ -46,11 +85,14 @@ def _connect() -> sqlite3.Connection:
 
     This helper centralizes database connection setup.
 
-    It also makes sure the data/ folder exists before SQLite tries to create
+    It also makes sure the database folder exists before SQLite tries to create
     sentinel.db.
     """
 
-    # Create the data directory if it does not already exist.
+    # Create the database directory if it does not already exist.
+    #
+    # In the installed app, this will normally be:
+    #     C:/Users/<user>/AppData/Local/Sentinel/
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     # Connect to the local SQLite database file.
@@ -303,6 +345,7 @@ def get_frontend_alerts(limit: int = 10) -> list[dict[str, Any]]:
         for scan in get_recent_scans(50)
         if scan["level"] in {"MEDIUM", "HIGH", "CRITICAL"}
     ][:limit]
+
 
 def clear_scan_history() -> None:
     """Delete all stored scan history and findings from SQLite.
