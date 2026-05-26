@@ -1,38 +1,90 @@
+"""Tkinter desktop UI for Sentinel.
+
+This module builds the main Sentinel desktop interface.
+
+The UI is responsible for:
+- showing the dashboard
+- allowing file selection by Browse or drag-and-drop
+- displaying scan results
+- showing recent alerts
+- showing scan history
+- showing the Threat Guide page
+- showing settings such as scan mode and notifications
+
+Important separation:
+    This file should not contain detection logic.
+
+The UI talks to controller.py.
+The controller talks to backend/backend_api.py.
+The backend handles scanning, Docker, antivirus, archives, and storage.
+
+This keeps the visual interface separate from the actual security logic.
+"""
+
+from __future__ import annotations
+
 import os
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import filedialog, ttk
 
 try:
+    # tkinterdnd2 adds drag-and-drop support to Tkinter.
+    # Normal Tkinter does not support dragging files from Windows Explorer
+    # into the app by default.
     from tkinterdnd2 import DND_FILES, TkinterDnD
+
     DND_AVAILABLE = True
+
 except ImportError:
+    # Drag-and-drop is optional.
+    # If tkinterdnd2 is not installed, the app still works through Browse.
     DND_FILES = None
     TkinterDnD = None
     DND_AVAILABLE = False
 
-from state import AppState
 from controller import Controller
+from state import AppState
 
 
 class SentinelUI:
+    """Main Sentinel desktop user interface."""
+
     def __init__(self, root: tk.Tk, state: AppState, controller: Controller) -> None:
+        """Create and initialize the Sentinel UI.
+
+        Args:
+            root:
+                The Tkinter root window.
+
+            state:
+                Shared application state object.
+
+            controller:
+                Controller object that handles scan actions and state updates.
+        """
+
         self.root = root
         self.state = state
         self.controller = controller
 
+        # Basic app window setup.
         self.root.title("Sentinel")
         self.root.geometry("1100x700")
         self.root.minsize(1000, 650)
         self.root.configure(bg="#0f172a")
 
+        # Track which sidebar tab is currently active.
         self.current_tab = "Dashboard"
+
+        # Store references to dynamic widgets that need to be updated later.
         self.nav_buttons = {}
         self.content_frame = None
-
         self.sidebar_status_label = None
         self.dashboard_widgets = {}
         self.settings_vars = {}
 
+        # Central color palette for the UI.
+        # Keeping colors in one dictionary makes the app easier to restyle later.
         self.colors = {
             "bg": "#0f172a",
             "panel": "#1e293b",
@@ -53,15 +105,32 @@ class SentinelUI:
         self._configure_ttk_style()
         self._build_layout()
         self._bind_shortcuts()
+
+        # Show the dashboard first when the app opens.
         self.show_dashboard()
 
     def _bind_shortcuts(self) -> None:
+        """Bind keyboard shortcuts for common actions."""
+
+        # Ctrl+O opens the file picker.
         self.root.bind("<Control-o>", lambda _e: self.browse_file())
+
+        # Ctrl+Enter starts a scan.
         self.root.bind("<Control-Return>", lambda _e: self.start_scan())
 
     def _configure_ttk_style(self) -> None:
+        """Configure ttk widget styles used by the app.
+
+        Tkinter has two widget systems:
+        - normal tk widgets
+        - themed ttk widgets
+
+        The progress bar is a ttk widget, so its colors are configured here.
+        """
+
         style = ttk.Style()
         style.theme_use("clam")
+
         style.configure(
             "Sentinel.Horizontal.TProgressbar",
             troughcolor=self.colors["panel_alt"],
@@ -73,11 +142,23 @@ class SentinelUI:
         )
 
     def _build_layout(self) -> None:
+        """Create the main application layout.
+
+        The app has two main areas:
+        - left sidebar navigation
+        - right content area
+        """
+
+        # The root window uses a grid layout:
+        # column 0 = sidebar
+        # column 1 = main content
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(1, weight=1)
 
         self.sidebar = tk.Frame(self.root, bg="#111827", width=220)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
+
+        # Prevent the sidebar from resizing based on its children.
         self.sidebar.grid_propagate(False)
 
         self.main_area = tk.Frame(self.root, bg=self.colors["bg"])
@@ -87,10 +168,14 @@ class SentinelUI:
 
         self._build_sidebar()
 
+        # content_frame is where each page is drawn.
+        # When switching tabs, this frame is cleared and rebuilt.
         self.content_frame = tk.Frame(self.main_area, bg=self.colors["bg"])
         self.content_frame.grid(row=0, column=0, sticky="nsew", padx=18, pady=18)
 
     def _build_sidebar(self) -> None:
+        """Build the left navigation sidebar."""
+
         logo_wrap = tk.Frame(self.sidebar, bg="#111827")
         logo_wrap.pack(fill="x", padx=20, pady=(24, 14))
 
@@ -115,6 +200,8 @@ class SentinelUI:
         divider = tk.Frame(self.sidebar, bg="#1f2937", height=1)
         divider.pack(fill="x", padx=18, pady=(8, 18))
 
+        # Sidebar page list.
+        # Each button calls the method that rebuilds the content area.
         nav_items = [
             ("Dashboard", self.show_dashboard),
             ("Scan History", self.show_history),
@@ -140,6 +227,8 @@ class SentinelUI:
                 cursor="hand2",
             )
             button.pack(fill="x", padx=12, pady=4)
+
+            # Save button references so active navigation styling can be updated.
             self.nav_buttons[name] = button
 
         bottom_status = tk.Frame(self.sidebar, bg="#111827")
@@ -165,6 +254,8 @@ class SentinelUI:
         self.sidebar_status_label.pack(fill="x", pady=(4, 0))
 
     def _set_active_nav(self, active_name: str) -> None:
+        """Update sidebar styling for the active page."""
+
         self.current_tab = active_name
 
         for name, button in self.nav_buttons.items():
@@ -174,13 +265,22 @@ class SentinelUI:
                 button.configure(bg="#111827", fg=self.colors["text"])
 
     def _clear_content(self) -> None:
+        """Remove the current page from the content area."""
+
         for widget in self.content_frame.winfo_children():
             widget.destroy()
 
+        # These dictionaries only apply to the page that is currently visible.
         self.dashboard_widgets = {}
         self.settings_vars = {}
 
     def _panel(self, parent: tk.Widget, title: str) -> tk.Frame:
+        """Create a reusable styled panel.
+
+        Most pages are made of panels with the same dark background, border,
+        title label, and internal spacing.
+        """
+
         panel = tk.Frame(
             parent,
             bg=self.colors["panel"],
@@ -201,6 +301,15 @@ class SentinelUI:
         return panel
 
     def refresh_static_views(self) -> None:
+        """Refresh whichever page is currently visible.
+
+        This is used after state changes such as:
+        - selecting a file
+        - finishing a scan
+        - changing a setting
+        - clearing alerts
+        """
+
         if self.sidebar_status_label:
             self.sidebar_status_label.config(text=self.state.status)
 
@@ -214,12 +323,20 @@ class SentinelUI:
             self.show_settings()
 
     def clear_alerts(self) -> None:
+        """Clear alerts from the in-memory UI state.
+
+        This does not delete scan history from SQLite.
+        It only clears the visible recent alerts list for the current session.
+        """
+
         self.state.alerts.clear()
 
         if self.current_tab == "Dashboard":
             self.update_dashboard_widgets()
 
     def load_history_item(self, item: dict) -> None:
+        """Load a previous scan history item into the dashboard result panel."""
+
         self.state.current_result = {
             "file": item["file"],
             "level": item["level"],
@@ -228,12 +345,19 @@ class SentinelUI:
         }
         self.state.status = "COMPLETE"
         self.state.current_scan = item["file"]
+
         self.show_dashboard()
 
     def show_dashboard(self) -> None:
+        """Build the main Dashboard page."""
+
         self._set_active_nav("Dashboard")
         self._clear_content()
 
+        # Dashboard layout:
+        # row 0 = active scan panel
+        # row 1 = file upload + scan controls
+        # row 2 = scan results + recent alerts
         self.content_frame.grid_rowconfigure(2, weight=1)
         self.content_frame.grid_columnconfigure(0, weight=1)
 
@@ -299,7 +423,11 @@ class SentinelUI:
         )
         drop_zone.pack(fill="both", expand=True, padx=14, pady=(0, 14))
         drop_zone.pack_propagate(False)
+
+        # Clicking the drop zone opens the file picker.
         drop_zone.bind("<Button-1>", lambda _event: self.browse_file())
+
+        # Small hover effect to make the drop zone feel interactive.
         drop_zone.bind("<Enter>", lambda _event: drop_zone.config(bg="#334155"))
         drop_zone.bind("<Leave>", lambda _event: drop_zone.config(bg=self.colors["panel_alt"]))
 
@@ -326,6 +454,7 @@ class SentinelUI:
         )
         drop_subtitle.pack()
 
+        # Register drag-and-drop handlers if tkinterdnd2 is installed.
         self._enable_drag_and_drop(drop_zone, drop_title, drop_subtitle)
 
         controls_panel = self._panel(middle_frame, "Scan Controls")
@@ -485,6 +614,8 @@ class SentinelUI:
         alerts_container = tk.Frame(alerts_panel, bg=self.colors["panel"])
         alerts_container.pack(fill="both", expand=True, padx=14, pady=(0, 14))
 
+        # Save widget references so update_dashboard_widgets() can modify them
+        # without rebuilding the entire page every time.
         self.dashboard_widgets = {
             "status_value": status_value,
             "progressbar": progressbar,
@@ -500,6 +631,8 @@ class SentinelUI:
         self.update_dashboard_widgets()
 
     def update_dashboard_widgets(self) -> None:
+        """Update dashboard widgets using the current AppState values."""
+
         if not self.dashboard_widgets:
             return
 
@@ -529,6 +662,8 @@ class SentinelUI:
             fg=self._severity_color(level),
         )
 
+        # Disable Browse/Scan while a scan animation is running.
+        # This prevents the user from triggering multiple scans at the same time.
         if self.state.is_scanning:
             self.dashboard_widgets["scan_button"].config(state="disabled")
             self.dashboard_widgets["browse_button"].config(state="disabled")
@@ -547,6 +682,7 @@ class SentinelUI:
         for widget in alerts_container.winfo_children():
             widget.destroy()
 
+        # Rebuild the recent alerts list from state.
         for alert in self.state.alerts:
             item = tk.Frame(
                 alerts_container,
@@ -585,6 +721,8 @@ class SentinelUI:
             ).pack(side="right", padx=(8, 10), pady=10)
 
     def _add_history_row(self, parent: tk.Frame, row_data: dict) -> None:
+        """Add one clickable row to the Scan History page."""
+
         row = tk.Frame(
             parent,
             bg=self.colors["row_bg"],
@@ -606,6 +744,7 @@ class SentinelUI:
             for child in row.winfo_children():
                 child.config(bg=self.colors["row_bg"])
 
+        # Clicking a history row loads its result back into the dashboard.
         row.bind("<Enter>", on_enter)
         row.bind("<Leave>", on_leave)
         row.bind("<Button-1>", lambda _e, item=row_data: self.load_history_item(item))
@@ -659,6 +798,8 @@ class SentinelUI:
         time_label.bind("<Button-1>", lambda _e, item=row_data: self.load_history_item(item))
 
     def show_history(self) -> None:
+        """Build the Scan History page."""
+
         self._set_active_nav("Scan History")
         self._clear_content()
         self.sidebar_status_label.config(text=self.state.status)
@@ -675,6 +816,12 @@ class SentinelUI:
         columns = [("File", 44), ("Threat", 16), ("Time", 20)]
 
         def build_history_table(query: str = "") -> None:
+            """Build or rebuild the history table.
+
+            This nested function keeps table-building logic close to the search
+            field that controls it.
+            """
+
             for widget in table_wrap.winfo_children():
                 widget.destroy()
 
@@ -707,6 +854,7 @@ class SentinelUI:
         def filter_history(*_args) -> None:
             build_history_table(search_var.get())
 
+        # Rebuild table whenever the search input changes.
         search_var.trace_add("write", filter_history)
 
         search_entry = tk.Entry(
@@ -732,6 +880,8 @@ class SentinelUI:
         body: str,
         accent: str | None = None,
     ) -> None:
+        """Create one explanation card for the Threat Guide page."""
+
         card = tk.Frame(
             parent,
             bg="#0b1220",
@@ -761,6 +911,14 @@ class SentinelUI:
         ).pack(fill="x", padx=12, pady=(0, 10))
 
     def show_threat_guide(self) -> None:
+        """Build the Threat Guide page.
+
+        This page helps beginner users understand Sentinel's scan results.
+
+        The dissertation can explain technical details in more depth, but the
+        app itself should still explain the most important result meanings.
+        """
+
         self._set_active_nav("Threat Guide")
         self._clear_content()
         self.sidebar_status_label.config(text=self.state.status)
@@ -789,6 +947,8 @@ class SentinelUI:
         body.grid_rowconfigure(0, weight=1)
         body.grid_columnconfigure(0, weight=1)
 
+        # A canvas is used so the Threat Guide can scroll.
+        # Normal frames do not scroll by themselves in Tkinter.
         canvas = tk.Canvas(
             body,
             bg=self.colors["panel"],
@@ -814,12 +974,15 @@ class SentinelUI:
             canvas.configure(scrollregion=canvas.bbox("all"))
 
         def resize_scroll_frame(event) -> None:
+            # Make the inner frame match the canvas width.
+            # Without this, the guide cards stay narrow when the window expands.
             canvas.itemconfig(canvas_window, width=event.width)
 
         def on_mousewheel(event) -> None:
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
         def bind_mousewheel(_event=None) -> None:
+            # Bind only while the mouse is over the guide page.
             canvas.bind_all("<MouseWheel>", on_mousewheel)
 
         def unbind_mousewheel(_event=None) -> None:
@@ -938,6 +1101,8 @@ class SentinelUI:
         update_scroll_region()
 
     def show_settings(self) -> None:
+        """Build the Settings page."""
+
         self._set_active_nav("Settings")
         self._clear_content()
         self.sidebar_status_label.config(text=self.state.status)
@@ -1030,6 +1195,8 @@ class SentinelUI:
         ).pack(anchor="w", pady=6)
 
     def _setting_row(self, parent: tk.Frame, label_text: str, value_text: str) -> None:
+        """Create a read-only setting display row."""
+
         tk.Label(
             parent,
             text=label_text,
@@ -1053,6 +1220,8 @@ class SentinelUI:
         ).pack(fill="x")
 
     def _enable_drag_and_drop(self, *widgets: tk.Widget) -> None:
+        """Enable drag-and-drop support on the provided widgets if available."""
+
         if not DND_AVAILABLE or DND_FILES is None:
             return
 
@@ -1060,14 +1229,22 @@ class SentinelUI:
             try:
                 widget.drop_target_register(DND_FILES)
                 widget.dnd_bind("<<Drop>>", self.handle_file_drop)
+
             except Exception:
+                # Drag-and-drop should never stop the UI from working.
+                # Browse still works even if registration fails.
                 pass
 
     def handle_file_drop(self, event) -> None:
+        """Handle a file being dropped into the upload area."""
+
         dropped_data = event.data
 
         try:
+            # Windows paths can arrive wrapped in braces.
+            # splitlist handles paths with spaces more safely than a simple split.
             paths = self.root.tk.splitlist(dropped_data)
+
         except Exception:
             paths = [dropped_data]
 
@@ -1093,10 +1270,13 @@ class SentinelUI:
         self.controller.select_file(path)
         self.refresh_static_views()
 
+        # If Auto-scan is enabled, start scanning shortly after the file is selected.
         if self.state.settings.get("auto_scan", False):
             self.root.after(150, self.start_scan)
 
     def browse_file(self) -> None:
+        """Open a file picker and select a file for scanning."""
+
         initial_dir = self.state.settings.get("default_scan_folder", "")
 
         path = filedialog.askopenfilename(
@@ -1111,19 +1291,19 @@ class SentinelUI:
                 ),
                 (
                     "Archives",
-                    "*.zip"
+                    "*.zip",
                 ),
                 (
                     "Scripts",
-                    "*.ps1 *.bat *.cmd *.sh *.py *.js *.ts"
+                    "*.ps1 *.bat *.cmd *.sh *.py *.js *.ts",
                 ),
                 (
                     "Logs and text files",
-                    "*.txt *.log *.csv *.json *.xml *.yaml *.yml *.md *.ini *.conf *.cfg *.env"
+                    "*.txt *.log *.csv *.json *.xml *.yaml *.yml *.md *.ini *.conf *.cfg *.env",
                 ),
                 (
                     "All files",
-                    "*.*"
+                    "*.*",
                 ),
             ],
         )
@@ -1133,6 +1313,13 @@ class SentinelUI:
             self.refresh_static_views()
 
     def start_scan(self) -> None:
+        """Start the scan flow from the UI.
+
+        The controller prepares the state.
+        The UI then runs a short progress animation before finish_scan() performs
+        the actual backend scan.
+        """
+
         can_scan = self.controller.start_scan()
         self.refresh_static_views()
 
@@ -1140,6 +1327,12 @@ class SentinelUI:
             self._step_progress(0)
 
     def _step_progress(self, value: int) -> None:
+        """Animate the progress bar before finishing the scan.
+
+        This is a simple UI animation.
+        It is not a real measurement of scan progress.
+        """
+
         if value <= 100:
             self.controller.set_progress(value)
 
@@ -1155,6 +1348,8 @@ class SentinelUI:
         self.refresh_static_views()
 
     def _format_findings(self) -> str:
+        """Format the current result findings for the text box."""
+
         if not self.state.current_result:
             return (
                 "Awaiting scan results...\n\n"
@@ -1170,6 +1365,8 @@ class SentinelUI:
         return "\n".join(f"- {finding}" for finding in findings)
 
     def _severity_color(self, level: str) -> str:
+        """Return the display color for a threat level."""
+
         level = str(level).upper()
 
         return {
@@ -1182,6 +1379,8 @@ class SentinelUI:
         }.get(level, self.colors["text"])
 
     def _status_color(self, status: str) -> str:
+        """Return the display color for a scan status."""
+
         status = str(status).upper()
 
         return {
@@ -1194,14 +1393,20 @@ class SentinelUI:
 
 
 def main() -> None:
+    """Start the Sentinel desktop app."""
+
     if DND_AVAILABLE and TkinterDnD is not None:
+        # Use TkinterDnD root when drag-and-drop support is installed.
         root = TkinterDnD.Tk()
     else:
+        # Fall back to normal Tkinter root.
         root = tk.Tk()
 
     state = AppState()
     controller = Controller(state)
+
     SentinelUI(root, state, controller)
+
     root.mainloop()
 
 
