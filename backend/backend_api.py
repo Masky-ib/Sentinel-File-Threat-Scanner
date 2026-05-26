@@ -10,6 +10,7 @@ Instead, the controller calls functions from this file:
 - safe_run_scan()
 - load_history()
 - load_alerts()
+- clear_history()
 
 This keeps the UI layer simpler and keeps backend logic grouped in one place.
 """
@@ -22,7 +23,13 @@ from typing import Any
 
 from .scanner import format_findings_for_frontend
 from .scan_router import scan_file
-from .storage import get_frontend_alerts, get_frontend_history, init_db, save_scan
+from .storage import (
+    clear_scan_history,
+    get_frontend_alerts,
+    get_frontend_history,
+    init_db,
+    save_scan,
+)
 
 
 def run_scan(file_path: str, scan_mode: str = "auto") -> dict[str, Any]:
@@ -169,7 +176,7 @@ def safe_run_scan(file_path: str, scan_mode: str = "auto") -> dict[str, Any]:
                 "File could not be scanned.",
                 f"Error type: {type(exc).__name__}",
                 f"Details: {exc}",
-                "Try a readable text-based file such as .txt, .log, .json, .csv, .py, .ps1, .bat, .md, .xml, .yaml, .ini, or .conf.",
+                "Try a readable security file such as .txt, .log, .json, .csv, .py, .ps1, .bat, .md, .xml, .yaml, .ini, .conf, or .zip.",
             ],
             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
@@ -201,3 +208,20 @@ def load_alerts() -> list[dict[str, Any]]:
 
     # The dashboard only shows a small number of recent alerts to avoid clutter.
     return get_frontend_alerts(10)
+
+
+def clear_history() -> None:
+    """Clear all saved scan history and findings.
+
+    This is called by the controller when the user chooses to clear scan history
+    from the desktop UI.
+
+    The database file itself is not deleted.
+    Only the saved scan rows and finding rows are removed.
+    """
+
+    # Ensure the database exists before trying to clear tables.
+    init_db()
+
+    # Remove stored scans and findings from SQLite.
+    clear_scan_history()
