@@ -304,9 +304,9 @@ class SentinelUI:
         )
         drop_title.pack(pady=(34, 6))
 
-        drop_subtitle_text = "or click to browse any text-readable file"
+        drop_subtitle_text = "or click to browse scripts, logs, configs, archives, and security files"
         if not DND_AVAILABLE:
-            drop_subtitle_text = "click to browse (drag & drop package not installed)"
+            drop_subtitle_text = "click to browse scripts, logs, configs, archives, and security files"
 
         drop_subtitle = tk.Label(
             drop_zone,
@@ -869,17 +869,36 @@ class SentinelUI:
 
     def browse_file(self) -> None:
         initial_dir = self.state.settings.get("default_scan_folder", "")
+
         path = filedialog.askopenfilename(
             title="Select file to scan",
             initialdir=initial_dir if initial_dir else None,
             filetypes=[
                 (
-                    "Text-readable security files",
-                    "*.txt *.log *.csv *.json *.xml *.yaml *.yml *.md *.py *.js *.ts *.html *.css *.sql *.ini *.conf *.cfg *.ps1 *.bat *.cmd *.sh *.env",
+                    "Supported Sentinel scan files",
+                    "*.txt *.log *.csv *.json *.xml *.yaml *.yml *.md "
+                    "*.py *.js *.ts *.html *.css *.sql *.ini *.conf *.cfg "
+                    "*.ps1 *.bat *.cmd *.sh *.env *.zip"
                 ),
-                ("All files", "*.*"),
+                (
+                    "Archives",
+                    "*.zip"
+                ),
+                (
+                    "Scripts",
+                    "*.ps1 *.bat *.cmd *.sh *.py *.js *.ts"
+                ),
+                (
+                    "Logs and text files",
+                    "*.txt *.log *.csv *.json *.xml *.yaml *.yml *.md *.ini *.conf *.cfg *.env"
+                ),
+                (
+                    "All files",
+                    "*.*"
+                ),
             ],
         )
+
         if path:
             self.controller.select_file(path)
             self.refresh_static_views()
