@@ -14,6 +14,7 @@ Controller responsibilities:
 - start and finish scans
 - update status/progress values
 - refresh scan history and alerts from SQLite
+- clear saved scan history when requested
 - send optional desktop notifications for important results
 - update user settings
 """
@@ -24,7 +25,7 @@ import os
 from typing import Any
 
 from state import AppState
-from backend.backend_api import load_alerts, load_history, safe_run_scan
+from backend.backend_api import clear_history, load_alerts, load_history, safe_run_scan
 from backend.notifications import send_desktop_notification
 
 
@@ -156,6 +157,36 @@ class Controller:
         # Send a desktop notification only for results that deserve attention.
         if result["level"] in ["MEDIUM", "HIGH", "CRITICAL"]:
             self._send_notification(result)
+
+    def clear_scan_history(self) -> None:
+        """Clear saved scan history and reset related UI state.
+
+        This is called by the UI when the user confirms that they want to delete
+        saved scan history.
+
+        The database tables are cleared through backend_api.clear_history().
+        The in-memory UI state is reset afterward so the visible dashboard and
+        history page do not still show old data.
+        """
+
+        # Do not clear history while a scan is running.
+        # This avoids deleting database rows while a new result may be saving.
+        if self.state.is_scanning:
+            return
+
+        # Clear the saved SQLite scan history and findings.
+        clear_history()
+
+        # Reset the in-memory copies shown by the UI.
+        self.state.history = []
+        self.state.alerts = []
+
+        # Clear the visible current result so the dashboard no longer shows an
+        # old scan after history has been deleted.
+        self.state.current_result = None
+        self.state.current_scan = "None"
+        self.state.progress = 0
+        self.state.status = "IDLE"
 
     def update_setting(self, key: str, value: Any) -> None:
         """Update one application setting in memory.
